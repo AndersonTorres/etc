@@ -1,0 +1,11 @@
+# -*- mode: org; coding: utf-8-unix; fill-column: 80 -*-
+
+#+TITLE: ETC
+
+* Introdução
+
+  Este repositório contém os arquivos de configuração que uso atualmente.
+
+* Licença
+
+  Até melhor ideia, este diretório está sob a licença ISC.
