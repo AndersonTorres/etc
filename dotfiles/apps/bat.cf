@@ -1,0 +1,5 @@
+# -*- mode: conf ; coding: utf-8-unix; fill-column: 80 -*-
+
+--pager="less -FR"
+--theme="Dracula"
+--tabs="4"

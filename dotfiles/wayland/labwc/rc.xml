@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+
+<openbox_config>
+  <lab>
+    <xdg_shell_server_side_deco>yes</xdg_shell_server_side_deco>
+  </lab>
+
+  <focus>
+    <followMouse>no</followMouse>
+    <raiseOnFocus>no</raiseOnFocus>
+  </focus>
+
+  <theme>
+    <name>twm</name>
+    <font place="ActiveWindow">
+      <name>Sans</name>
+      <size>20</size>
+    </font>
+  </theme>
+
+  <keyboard>
+    <keybind key="C-A-Backspace">
+      <action name="Exit"/>
+    </keybind>
+    <keybind key="A-Tab">
+      <action name="NextWindow"/>
+    </keybind>
+    <keybind key="W-z">
+      <action name="Emacs">
+        <command>emacs</command>
+      </action>
+    </keybind>
+  </keyboard>
+
+</openbox_config>

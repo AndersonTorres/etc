@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+
+swaybg -i ~/Documentos/share/wallpapers/misc-wallpaper-11.png >/dev/null 2>&1 &

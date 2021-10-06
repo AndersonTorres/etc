@@ -1,0 +1,36 @@
+{
+    "label"   : "lock",
+    "action"  : "echo",
+    "text"    : "[L]ock (not implemented)",
+    "keybind" : "L"
+}
+{
+    "label"   : "Hibernate",
+    "action"  : "systemctl hibernate",
+    "text"    : "[H]ibernate",
+    "keybind" : "H"
+}
+{
+    "label"   : "logout",
+    "action"  : "loginctl terminate-user $USER",
+    "text"    : "[E]xit",
+    "keybind" : "E"
+}
+{
+    "label"   : "shutdown",
+    "action"  : "systemctl poweroff",
+    "text"    : "[P]ower Off",
+    "keybind" : "P"
+}
+{
+    "label"   : "suspend",
+    "action"  : "systemctl suspend",
+    "text"    : "S[u]spend",
+    "keybind" : "u"
+}
+{
+    "label"   : "reboot",
+    "action"  : "systemctl reboot",
+    "text"    : "[R]eboot",
+    "keybind" : "R"
+}

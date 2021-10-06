@@ -1,0 +1,39 @@
+#!/bin/sh
+
+# keyboard settings
+
+cutter bind ctrl+alt+backspace quit
+
+# super is the infamous Logo key!
+
+mod=super
+modCtrl=$mod+ctrl
+modAlt=$mod+alt
+modShift=$mod+shift
+
+cutter config gap 10
+cutter config focus_color 204 255 000 0 # ccff33
+cutter config mouse_mod $mod
+
+cutter bind $mod+left  focus left
+cutter bind $mod+right focus right
+
+cutter bind $modShift+space toggle_floating
+cutter bind $modShift+left  move -10   0
+cutter bind $modShift+right move  10   0
+cutter bind $modShift+up    move   0 -10
+cutter bind $modShift+down  move   0  10
+
+for i in $(seq 0 5); do
+	cutter bind $modCtrl+$i workspace move   $i
+	cutter bind $mod+$i     workspace switch $i
+done
+
+cutter bind $mod+z close
+
+cutter bind $mod+e           exec emacs
+cutter bind $modShift+return exec kitty sh -c ~/.config/scripts/menu.sh
+cutter bind $mod+return      exec kitty
+
+cutter exec waybar
+# cutter exec emacs
