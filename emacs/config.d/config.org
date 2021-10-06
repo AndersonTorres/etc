@@ -1,0 +1,1112 @@
+# -*- mode: org; coding: utf-8-unix; fill-column: 80 -*-
+
+#+title: Configuração do Emacs em Programação Literata
+
+* Header
+
+Porque todo bom arquivo =.el= precisa desses frufrus.
+
+#+begin_src emacs-lisp
+  ;;; config.el --- Emacs configuration file
+  ;;; -*- mode: emacs-lisp; coding: utf-8-unix; -*-
+
+  ;;; Commentary:
+  ;; My (tangled) configuration file
+
+  ;;; Code:
+
+#+end_src
+
+* Extras
+
+Uma biblioteca de funções (que eu acho) úteis.
+
+#+begin_src emacs-lisp
+  (defmacro at1985|message (emitp &rest args)
+    "Encapsulates message, controlling its exhibition.
+
+  When EMITP is non-nil, displays ARGS."
+    `(when ,emitp (message ,@args)))
+
+  (defmacro at1985|expanded-form (form)
+    "Output expanded form of given `FORM'."
+    `(progn
+       (pp (macroexpand-1 ',form))
+       nil))
+
+  (defun at1985|add-after-init-hook (hook)
+    "Add the HOOK to `after-init-hook'."
+    (add-hook 'after-init-hook hook))
+
+  (defun at1985|show-percentage ()
+    "Calculate and display the percentage before and after the current point."
+    (interactive)
+    (let* ((frac (/ (* 1.0 (point)) (point-max)))
+           (perc (* 100 frac))
+           (rest (- 100 perc)))
+      (message "at1985|show-percentage: %d + %d = %d"
+               perc rest (+ perc rest))))
+
+  (defun at1985|move-region (start end n)
+    "Move the region bewteen START and END by N lines."
+    (interactive "r\np")
+    (let
+        ((line-text (delete-and-extract-region start end)))
+      (forward-line n)
+      (let
+          ((start (point)))
+        (insert line-text)
+        (setq deactivate-mark nil)
+        (set-mark start))))
+
+  (defun at1985|move-region-up (start end n)
+    "Move the region between START and END up by N lines."
+    (interactive "r\np")
+    (at1985|move-region start end (if (null n) -1 (- n))))
+
+  (defun at1985|move-region-down (start end n)
+    "Move the region between START and END down by N lines."
+    (interactive "r\np")
+    (at1985|move-region start end (if (null n) 1 n)))
+
+  (defun at1985|toggle-fullscreen ()
+    "Toggle fullscreen."
+    (interactive)
+    (set-frame-parameter nil 'fullscreen
+                         (if (frame-parameter nil 'fullscreen)
+                             nil
+                           'fullboth)))
+
+  (defun at1985|reload-init ()
+    "Reloads init file, `after-init-hook' and `emacs-startup-hook'."
+    (interactive)
+    (load-file user-init-file)
+    (run-hooks 'after-init-hook
+               'emacs-startup-hook))
+
+  (defun at1985|find-init-file ()
+    "Open Emacs startup file."
+    (interactive)
+    (find-file user-init-file))
+
+  (defun at1985|req (feature)
+    "Wraps (require FEATURE) in a cute message."
+    (let ((retval (require feature nil t)))
+      (prog1
+          retval
+        (at1985|message t
+                        "%s %s"
+                        (if retval "[S]" "[F]")
+                        feature))))
+#+end_src
+
+* Startup
+
+#+begin_src emacs-lisp
+  (require 'subr-x) ; a "native" Emacs library, with many useful functions!
+  (require 'cl-lib)
+
+  ;; Set EDITOR if not set already
+  (unless (getenv "EDITOR")
+    (setenv "EDITOR" "emacsclient")
+    (setenv "VISUAL" (getenv "EDITOR")))
+
+  ;; Set PAGER if not set already
+  (unless (getenv "PAGER")
+    (setenv "PAGER" "cat"))
+
+  (defconst home-directory (getenv "HOME")
+    "Home directory.")
+
+  (defconst user-emacs-directory-log (concat user-emacs-directory "/log/")
+    "Logs directory.")
+
+  (defconst started-time (time-convert nil 'integer)
+    "The time Emacs started, in seconds.")
+
+  (setq-default
+   fill-column 80
+   frame-resize-pixelwise t
+   indent-tabs-mode nil
+   line-move-visual nil
+   major-mode 'text-mode
+   require-final-newline t
+   tab-width 4
+   vc-follow-symlinks t
+   word-wrap t)
+
+  (setq
+   column-number-mode 1
+   inhibit-startup-screen t
+   load-prefer-newer t
+   mouse-yank-at-point t
+   require-final-newline t
+   save-interprogram-paste-before-kill t
+   visible-bell t)
+
+  (setq initial-scratch-message "\
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; This buffer is for notes you don't want to save, and to Emacs Lisp code.   ;;
+  ;; If you want to create a file, visit it with `M-x find-file' (usually       ;;
+  ;; bounded to `C-x C-f'), then insert text in the file's own buffer.          ;;
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ")
+
+  (setq frame-title-format
+        '(buffer-file-name
+          "%b - %f" ; File buffer
+          (dired-directory dired-directory ; Dired buffer
+                           (revert-buffer-function
+                            "%b" ; Buffer Menu
+                            ("%b - Dir: " default-directory))))) ; Plain buffer
+
+  (prefer-coding-system 'utf-8)
+  (set-default-coding-systems 'utf-8)
+  (set-terminal-coding-system 'utf-8)
+  (set-keyboard-coding-system 'utf-8)
+
+  (add-hook 'window-configuration-change-hook
+            (lambda ()
+              (ruler-mode 1)))
+
+  ;; because it is boring to write three letters instead of one
+  (defalias 'yes-or-no-p 'y-or-n-p)
+
+
+#+end_src
+
+* No Littering
+
+Para manter o =.emacs.d= limpo!
+
+É importante deixar isso o mais no topo possível, pois todos os outros pacotes
+farão uso destas definições.
+
+#+begin_src emacs-lisp
+  (defun at1985|no-littering ()
+    (setq
+     no-littering-etc-directory (expand-file-name ".cache/emacs/etc/" home-directory)
+     no-littering-var-directory (expand-file-name ".cache/emacs/var/" home-directory))
+    (when (at1985|req 'no-littering)
+      (dolist (d `(,no-littering-var-directory
+                   ,no-littering-etc-directory))
+        (unless (file-exists-p d)
+          (make-directory d t)))))
+
+  (at1985|no-littering)
+#+end_src
+
+* Server
+
+#+begin_src emacs-lisp
+  (defun at1985|server-hook ()
+    (when (at1985|req 'server)
+      (unless (server-running-p)
+        (server-start))))
+
+  (at1985|add-after-init-hook 'at1985|server-hook)
+#+end_src
+
+* Backup
+
+#+begin_src emacs-lisp
+  ;; depends: cl-lib
+
+  (defmacro at1985|emit-backup-pair (ext directory)
+    "Returns a pair (regex . directory) suitable for use as
+  `backup-directory-alist'.
+
+  The car of this pair is `EXT' in regexp form, and the cdr is a subdirectory of
+  `DIRECTORY' named `EXT'."
+
+    `(cons (rx "." ,ext eol)
+           (expand-file-name ,ext ,directory)))
+
+  (defun at1985|backup-hook ()
+    (setq
+     auto-save-default t
+     auto-save-interval 300
+     auto-save-timeout 30
+     backup-by-copying t
+     delete-by-moving-to-trash nil
+     delete-old-versions t
+     kept-new-versions 5
+     kept-old-versions 5
+     make-backup-files t
+     vc-make-backup-files t
+     version-control t)
+
+    (let*
+        ((backup-directory
+          (expand-file-name ".text-backups" home-directory))
+         (c-pair (at1985|emit-backup-pair "c" backup-directory))
+         (el-pair (at1985|emit-backup-pair "el" backup-directory))
+         (md-pair (at1985|emit-backup-pair "md" backup-directory))
+         (nix-pair (at1985|emit-backup-pair "nix" backup-directory))
+         (org-pair (at1985|emit-backup-pair "org" backup-directory))
+         (py-pair (at1985|emit-backup-pair "py" backup-directory))
+         (sh-pair (at1985|emit-backup-pair "sh" backup-directory))
+         (tex-pair (at1985|emit-backup-pair "tex" backup-directory))
+         (txt-pair (at1985|emit-backup-pair "txt" backup-directory))
+         (adoc-pair (at1985|emit-backup-pair "adoc" backup-directory)))
+      (setq backup-directory-alist
+            `(("." . ,backup-directory)))
+      (dolist (l `(,txt-pair
+                   ,tex-pair
+                   ,sh-pair
+                   ,py-pair
+                   ,org-pair
+                   ,nix-pair
+                   ,md-pair
+                   ,el-pair
+                   ,c-pair
+                   ,adoc-pair))
+        (unless (file-exists-p (cdr l))
+          (make-directory (cdr l) t))
+        (cl-pushnew l backup-directory-alist))))
+
+  (at1985|add-after-init-hook 'at1985|backup-hook)
+#+end_src
+
+* CRUX
+
+#+begin_src emacs-lisp
+  (defun at1985|crux-hook ()
+    (when (at1985|req 'crux)))
+
+  (at1985|add-after-init-hook 'at1985|crux-hook)
+#+end_src
+
+* Blackout
+
+#+begin_src emacs-lisp
+  (defun at1985|blackout-hook ()
+    (when (at1985|req 'blackout)))
+
+  (at1985|add-after-init-hook 'at1985|blackout-hook)
+#+end_src
+
+* Hardcore Mode
+
+Porque eu não quero usar setinhas!
+
+#+begin_src emacs-lisp  
+  (defun at1985|hardcore-mode-hook ()
+    (setq
+     too-hardcore-backspace t
+     too-hardcore-return t)
+    (when (at1985|req 'hardcore-mode)
+      (global-hardcore-mode)))
+
+  (at1985|add-after-init-hook 'at1985|hardcore-mode-hook)
+#+end_src
+
+* Beginend
+
+#+begin_src emacs-lisp  
+  (defun at1985|beginend-hook ()
+    (when (at1985|req 'beginend)
+      (beginend-global-mode)))
+
+  (at1985|add-after-init-hook 'at1985|beginend-hook)
+#+end_src
+
+* Hungry Delete
+
+#+begin_src emacs-lisp
+  (defun at1985|hungry-delete-hook ()
+    (when (at1985|req 'hungry-delete)
+      (global-hungry-delete-mode)))
+
+  (at1985|add-after-init-hook 'at1985|hungry-delete-hook)
+#+end_src
+
+* Unfill
+
+#+begin_src emacs-lisp
+  (defun at1985|unfill-hook ()
+    (when (at1985|req 'unfill)))
+
+  (at1985|add-after-init-hook 'at1985|unfill-hook)
+#+end_src
+
+* Completions
+
+#+begin_src emacs-lisp
+  (defun at1985|consult-hook ()
+    (when (at1985|req 'consult)
+      (global-set-key (kbd "C-c h") #'consult-history)))
+
+  (defun at1985|embark-hook ()
+    (when (at1985|req 'embark)))
+
+  (defun at1985|marginalia-hook ()
+    (setq marginalia-max-relative-age 0
+          marginalia-align 'center
+          marginalia-annotators '(marginalia-annotators-heavy
+                                  marginalia-annotators-light
+                                  nil))
+    (when (at1985|req 'marginalia)
+      (marginalia-mode)
+      (define-key minibuffer-local-map (kbd "M-A") #'marginalia-cycle)))
+
+  (defun at1985|orderless-hook ()
+    (setq completion-styles '(substring
+                              orderless
+                              partial-completion
+                              flex))
+    (when (at1985|req 'orderless)))
+
+  (defun at1985|prescient-hook ()
+    (when (at1985|req 'prescient)))
+
+  (defun at1985|selectrum-hook ()
+    (when (at1985|req 'selectrum)
+      (global-set-key (kbd "C-x C-z") #'selectrum-repeat)
+      (selectrum-mode +1)))
+
+  (defun at1985|selectrum-prescient-hook ()
+    (when (at1985|req 'selectrum-prescient)
+      (selectrum-prescient-mode +1)
+      (prescient-persist-mode +1)))
+
+  (defun at1985|vertico-hook ()
+    (when (at1985|req 'vertico)
+      (setq vertico-count 10
+            vertico-cycle t
+            vertico-resize t)
+      (vertico-mode)))
+
+  (dolist (hook '(at1985|consult-hook
+                  ;; at1985|embark-hook
+                  at1985|marginalia-hook
+                  at1985|orderless-hook
+                  at1985|prescient-hook
+                  ;; at1985|selectrum-hook
+                  ;; at1985|selectrum-prescient-hook
+                  at1985|vertico-hook))
+    (at1985|add-after-init-hook hook))
+#+end_src
+
+* Savehist
+
+#+begin_src emacs-lisp
+  (defun at1985|savehist-mode-hook ()
+    (when (at1985|req 'savehist)
+      (savehist-mode +1)))
+
+  (at1985|add-after-init-hook 'at1985|savehist-mode-hook)
+#+end_src
+
+* Speedbar
+
+* Buffer Move
+
+#+begin_src emacs-lisp
+  (defun at1985|buffer-move-hook ()
+    (setq
+     buffer-move-behavior 'swap
+     buffer-move-stay-after-swap t)
+
+    (when (at1985|req 'buffer-move)))
+
+  (at1985|add-after-init-hook 'at1985|buffer-move-hook)
+#+end_src
+
+* Super Save
+
+#+begin_src emacs-lisp
+  (defun at1985|super-save-hook ()
+    (setq
+     super-save-auto-save-when-idle t
+     super-save-remote-file t
+     super-save-exclude '(".gpg"))
+
+    (when (at1985|req 'super-save)
+      (super-save-mode +1)))
+
+  (at1985|add-after-init-hook 'at1985|super-save-hook)
+#+end_src
+
+* recentf
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|recentf-hook ()
+    (setq
+     recentf-max-saved-items 10
+     recentf-menu-title "RECENT FILES"
+     recentf-menu-filter 'sort-basenames-ascending)
+    (when (at1985|req 'recentf)
+      (recentf-mode t)
+      (global-set-key (kbd "C-c a e") 'recentf-open-files)))
+
+  (at1985|add-after-init-hook 'at1985|recentf-hook)
+#+end_src
+
+* Shell Command Plus
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|shell-command+-hook ()
+    (when (at1985|req 'shell-command+)
+      (global-set-key (kbd "M-!") #'shell-command+)))
+
+  (at1985|add-after-init-hook 'at1985|shell-command+-hook)
+#+end_src
+
+* Editorconfig
+
+#+begin_src emacs-lisp
+  (defun at1985|editorconfig-hook ()
+    (when (at1985|req 'editorconfig)))
+
+  (at1985|add-after-init-hook 'at1985|editorconfig-hook)
+#+end_src
+
+* Multiple Cursors
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|multiple-cursors-hook ()
+    (when (at1985|req 'multiple-cursors)
+      (global-set-key (kbd "C-s-c C-s-c") 'mc/edit-lines)
+      (global-set-key (kbd "C-s->") 'mc/mark-next-like-this)
+      (global-set-key (kbd "C-s-<") 'mc/mark-previous-like-this)
+      (global-set-key (kbd "C-s-|") 'mc/mark-all-like-this)))
+
+  (at1985|add-after-init-hook 'at1985|multiple-cursors-hook)
+#+end_src
+
+* Sunrise File Manager
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|sunrise-hook ()
+    (when (at1985|req 'sunrise)
+      (at1985|req 'sunrise-modeline)
+      (at1985|req 'sunrise-buttons)))
+
+  ;; (at1985|add-after-init-hook 'at1985|sunrise-hook)
+#+end_src
+
+* Ripgrep
+
+#+begin_src emacs-lisp
+  (defun at1985|rg-hook ()
+    (when (and
+           (executable-find "rg")
+           (at1985|req 'rg))
+      (rg-enable-menu)))
+
+  (at1985|add-after-init-hook 'at1985|rg-hook)
+#+end_src
+
+* Text Mode
+
+#+begin_src emacs-lisp
+  (defun at1985|text-mode-hook ()
+    (dolist (hook '(turn-on-visual-line-mode
+                    turn-on-flyspell
+                    turn-on-auto-fill))
+      (add-hook 'text-mode-hook hook)))
+
+  (at1985|add-after-init-hook 'at1985|text-mode-hook)
+#+end_src
+
+* Org Mode
+
+#+begin_src emacs-lisp
+  (defun at1985|org-hook ()
+    (setq
+     org-html-htmlize-font-prefix "org-#"
+     org-html-htmlize-output-type 'inline-css
+     org-highlight-latex-and-related '(latex script)
+     org-link-descriptive nil)
+
+    (when (at1985|req 'org)
+      (add-hook 'org-mode-hook 'flyspell-mode)))
+
+  (at1985|add-after-init-hook 'at1985|org-hook)
+#+end_src
+
+* Weblorg
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|weblorg-hook ()
+    (when (at1985|req 'weblorg)))
+
+  (at1985|add-after-init-hook 'at1985|weblorg-hook)
+#+end_src
+
+* Asciidoc
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|adoc-mode-hook ()
+    (when (at1985|req 'adoc-mode)
+      (add-to-list 'auto-mode-alist
+                   `(,(rx (or ".adoc" ".asciidoc")) . adoc-mode))))
+
+  (at1985|add-after-init-hook 'at1985|adoc-mode-hook)
+#+end_src
+
+* Markdown
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|markdown-mode-hook ()
+    (when (at1985|req 'markdown-mode)
+      (add-to-list 'auto-mode-alist
+                   `(,(rx (or ".markdown" ".md")) . markdown-mode))))
+
+  (at1985|add-after-init-hook 'at1985|markdown-mode-hook)
+#+end_src
+
+* RST Mode
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|rst-mode-hook ()
+    (when (at1985|req 'rst)
+      (add-to-list 'auto-mode-alist
+                   `(,(rx (or ".rst" ".rest")) . rst-mode))))
+
+  (at1985|add-after-init-hook 'at1985|rst-mode-hook)
+#+end_src
+
+* Tex Mode
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|tex-hook ()
+    (setq
+     TeX-auto-save t
+     TeX-electric-escape nil
+     TeX-parse-self t
+     reftex-plug-into-AUCTeX t)
+
+    (when (at1985|req 'tex)
+      (dolist (mode '(LaTeX-math-mode
+                      auto-fill-mode
+                      flyspell-mode
+                      turn-on-reftex
+                      visual-line-mode))
+        (add-hook 'LaTeX-mode-hook mode))))
+
+  (at1985|add-after-init-hook 'at1985|tex-hook)
+#+end_src
+
+* Fish
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|fish-mode-hook ()
+    (when (at1985|req 'fish-mode)
+      (add-to-list 'auto-mode-alist
+                   `(,(rx ".fish") . fish-mode))))
+
+  (at1985|add-after-init-hook 'at1985|fish-mode-hook)
+#+end_src
+
+* Haskell
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|haskell-mode-hook ()
+    (when (at1985|req 'haskell-mode)
+      (add-to-list 'auto-mode-alist
+                   `(,(rx (or ".hs" ".lhs") eol) . haskell-mode))))
+
+  (at1985|add-after-init-hook 'at1985|haskell-mode-hook)
+#+end_src
+
+* Lua
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|lua-mode-hook ()
+    (when (at1985|req 'lua-mode)
+      (add-to-list 'auto-mode-alist
+                   `(,(rx ".lua") . lua-mode))))
+
+  (at1985|add-after-init-hook 'at1985|lua-mode-hook)
+#+end_src
+
+* Meson
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|meson-mode-hook ()
+    (when (at1985|req 'meson-mode)))
+
+  (at1985|add-after-init-hook 'at1985|meson-mode-hook)
+#+end_src
+
+* Ninja
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|ninja-mode-hook ()
+    (when (at1985|req 'ninja-mode)))
+
+  (at1985|add-after-init-hook 'at1985|ninja-mode-hook)
+#+end_src
+
+* Tuareg (Ocaml)
+
+#+begin_src emacs-lisp
+  (defun at1985|tuareg-hook ()
+    (setq
+     tuareg-indent-align-with-first-arg t
+     tuareg-match-patterns-aligned t)
+    (when (at1985|req 'tuareg)))
+
+  (at1985|add-after-init-hook 'at1985|tuareg-hook)
+#+end_src
+
+* Yafolding
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|yafolding-hook ()
+    (when (at1985|req 'yafolding)))
+
+  (at1985|add-after-init-hook 'at1985|yafolding-hook)
+#+end_src
+
+* Nix
+
+#+begin_src emacs-lisp
+  (defun at1985|nix-mode-hook ()
+    (when (at1985|req 'nix-mode)
+      (add-to-list 'auto-mode-alist
+                   `(,(rx ".nix" eol) . nix-mode))))
+
+  (at1985|add-after-init-hook 'at1985|nix-mode-hook)
+#+end_src
+
+* Zig
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|zig-mode-hook ()
+    (when (at1985|req 'zig-mode)
+      (add-to-list 'auto-mode-alist
+                   `(,(rx ".zig") . zig-mode))))
+
+  (at1985|add-after-init-hook 'at1985|zig-mode-hook)
+#+end_src
+
+* Highlight Parentheses
+
+#+begin_src emacs-lisp
+  (defun at1985|highlight-parentheses-hook ()
+    (when (at1985|req 'highlight-parentheses)
+      (global-highlight-parentheses-mode nil)))
+
+  (at1985|add-after-init-hook 'at1985|highlight-parentheses-hook)
+#+end_src
+
+* Paredit
+
+#+begin_src emacs-lisp
+  (defun at1985|paredit-hook ()
+    (when (at1985|req 'paredit)
+      (autoload 'enable-paredit-mode
+        "paredit"
+        "Turn on pseudo-structural editing of Lisp code."
+        t
+        nil)
+      (dolist (hook '(emacs-lisp-mode-hook
+                      eval-expression-minibuffer-setup-hook
+                      ielm-mode-hook
+                      lisp-mode-hook
+                      lisp-interaction-mode-hook
+                      scheme-mode-hook))
+        (add-hook hook #'enable-paredit-mode))))
+
+  (at1985|add-after-init-hook 'at1985|paredit-hook)
+#+end_src
+
+* Magit
+
+#+begin_src emacs-lisp
+  (defun at1985|magit-hook ()
+    (when (at1985|req 'magit)))
+
+  (at1985|add-after-init-hook 'at1985|magit-hook)
+#+end_src
+
+* Which Key
+
+#+begin_src emacs-lisp
+  (defun at1985|which-key-hook ()
+    (when (at1985|req 'which-key)
+      (which-key-mode)))
+
+  (at1985|add-after-init-hook 'at1985|which-key-hook)
+#+end_src
+
+* Uniquify
+
+#+begin_src emacs-lisp
+  (defun at1985|uniquify-hook ()
+    (setq uniquify-buffer-name-style 'reverse)
+
+    (when (at1985|req 'uniquify)))
+
+  (at1985|add-after-init-hook 'at1985|uniquify-hook)
+#+end_src
+
+* Icons
+
+#+begin_src emacs-lisp
+  (defun at1985|icons-hook ()
+    (when (at1985|req 'all-the-icons)
+      (when (at1985|req 'all-the-icons-dired))))
+
+  (at1985|add-after-init-hook 'at1985|icons-hook)
+#+end_src
+
+* Centaur Tabs
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|centaur-tabs-hook ()
+    (setq centaur-tabs-style "slant"
+          centaur-tabs-height 32
+          centaur-tabs-set-icons t
+          centaur-tabs-gray-out-icons 'buffer
+          centaur-tabs-set-bar 'over
+          centaur-tabs-close-button "X"
+          centaur-tabs-set-close-button nil
+          centaur-tabs-set-modified-marker t
+          centaur-tabs-modified-marker "***"
+          centaur-tabs-adjust-buffer-order t)
+
+    (when (at1985|req 'centaur-tabs)
+      (centaur-tabs-mode)
+      (centaur-tabs-enable-buffer-alphabetical-reordering)))
+
+  (at1985|add-after-init-hook 'at1985|centaur-tabs-hook)
+#+end_src
+
+* Meow
+
+#+begin_src emacs-lisp :tangle no
+  (defun modify-key ()
+    (define-key meow-normal-state-keymap [insert] meow-leader-keymap)
+    (define-key meow-motion-state-keymap [insert] meow-leader-keymap)
+    (define-key meow-normal-state-keymap (kbd "SPC") nil)
+    (define-key meow-motion-state-keymap (kbd "SPC") nil)
+
+    ;; introduce INSERT key into KEYPAD state
+    (define-key meow-keypad-state-keymap [insert] 'meow-keypad-self-insert)
+    ;; use INSERT as literal prefix
+    (setq meow--keypad-literal-prefix 'insert))
+
+  (defun meow-setup ()
+    (modify-key)
+    ;; Some meow vars
+    (setq meow-cheatsheet-layout meow-cheatsheet-layout-qwerty
+          meow-replace-state-name-list '((normal . "M: NORMAL")
+                                         (motion . "M: MOTION")
+                                         (keypad . "M: KEYPAD")
+                                         (insert . "M: INSERT")))
+
+    (add-to-list 'meow-mode-state-list
+                 '(shell-mode . normal))
+
+    (meow-motion-overwrite-define-key
+     '("n" . meow-next)
+     '("p" . meow-prev))
+
+    (meow-leader-define-key
+     ;; SPC n/p will run the original command in MOTION state.
+     '("n" . meow-motion-origin-command)
+     '("p" . meow-motion-origin-command)
+     ;; Use SPC (0-9) for digit arguments.
+     '("1" . meow-digit-argument)
+     '("2" . meow-digit-argument)
+     '("3" . meow-digit-argument)
+     '("4" . meow-digit-argument)
+     '("5" . meow-digit-argument)
+     '("6" . meow-digit-argument)
+     '("7" . meow-digit-argument)
+     '("8" . meow-digit-argument)
+     '("9" . meow-digit-argument)
+     '("0" . meow-digit-argument)
+
+     '("/" . meow-keypad-describe-key)
+     '("?" . meow-cheatsheet))
+
+    (meow-normal-define-key
+     '("1" . meow-expand-1)
+     '("2" . meow-expand-2)
+     '("3" . meow-expand-3)
+     '("4" . meow-expand-4)
+     '("5" . meow-expand-5)
+     '("6" . meow-expand-6)
+     '("7" . meow-expand-7)
+     '("8" . meow-expand-8)
+     '("9" . meow-expand-9)
+     '("0" . meow-expand-0)
+     '("-" . negative-argument)
+
+     '("a" . move-beginning-of-line) ; '("A" . )
+     '("b" . meow-left) '("B" . meow-left-expand)
+     ;; c
+     '("d" . meow-C-d)
+     ;; '("e" . meow-tail) '("E" . meow-tail-expand)
+     '("f" . meow-right) '("F" . meow-right-expand)
+     '("g" . meow-cancel)
+     '("i" . meow-append) '("I" . meow-insert)
+     ;; j
+     '("k" . meow-C-k)
+     ;; l
+     ;; m
+     '("n" . meow-next) '("N" . meow-next-expand)
+     ;; o
+     '("p" . meow-prev) '("P" . meow-prev-expand)
+     ;; q
+     ;; r
+     ;; s
+     '("t" . meow-till) '("T" . meow-till-expand)
+     ;; u
+     '("v" . meow-visit) '("V" . meow-kmacro-matches)
+     '("w" . meow-kill) '("W" . meow-save)
+     '("x" . meow-line) '("X" . meow-kmacro-lines)
+     '("y" . meow-yank) '("Y" . meow-yank-pop)
+     ;; z
+
+     '("." . meow-bounds-of-thing)
+     '(";" . meow-reverse)
+     '("<" . meow-begin-of-buffer)
+     '(">" . meow-end-of-buffer)
+     '("[" . meow-beginning-of-thing)
+     '("]" . meow-end-of-thing)
+     '("\\" . quoted-insert)
+     '("|" . repeat)
+
+     '("<escape>" . meow-last-buffer)))
+
+  (defun at1985|meow-hook ()
+    (when (at1985|req 'meow)
+      (meow-global-mode 1)
+      (meow-setup)
+      (meow-setup-line-number)
+      (meow-setup-indicator)))
+
+  (at1985|add-after-init-hook 'at1985|meow-hook)
+#+end_src
+
+* Hydra
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|hydra-hook ()
+    (when (at1985|req 'hydra)))
+
+  (at1985|add-after-init-hook 'at1985|hydra-hook)
+#+end_src
+
+* Which-Key
+
+#+begin_src emacs-lisp
+  (defun at1985|which-key-hook ()
+    (when (at1985|req 'which-key)
+      (which-key-mode)))
+
+  (at1985|add-after-init-hook 'at1985|which-key-hook)
+#+end_src
+
+* Dashboard
+
+#+begin_src emacs-lisp
+  (defun at1985|dashboard-hook ()
+    (when (at1985|req 'dashboard)
+      (setq
+       dashboard-banner-logo-title "Welcome to the Emacs Dashboard!"
+       dashboard-center-content t
+       dashboard-page-separator "\n\n"
+       dashboard-set-file-icons t
+       dashboard-set-heading-icons t
+       dashboard-show-shortcuts nil
+
+       dashboard-items '((agenda . 15)
+                         (bookmarks . 15)
+                         ;; (recents . 10) ;; rarely used
+                         (registers . 15))
+       dashboard-startup-banner 'logo)
+
+      (with-eval-after-load 'projectile
+        (add-to-list 'dashboard-items '(projects . 15)))
+
+      (dashboard-setup-startup-hook)))
+
+  (at1985|add-after-init-hook 'at1985|dashboard-hook)
+#+end_src
+
+* Modeline
+
+** Doom Modeline
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|doom-modeline-hook ()
+    (when (at1985|req 'doom-modeline)
+      (setq doom-modeline-height 25
+            doom-modeline-bar-width 5)))
+  (at1985|add-after-init-hook 'at1985|doom-modeline-hook)
+#+end_src
+
+** Telephone Line
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|telephone-line-hook ()
+    (when (at1985|req 'telephone-line)
+
+      (setq telephone-line-primary-left-separator 'telephone-line-gradient
+            telephone-line-primary-right-separator 'telephone-line-gradient
+            telephone-line-secondary-left-separator 'telephone-line-nil
+            telephone-line-secondary-right-separator 'telephone-line-nil)
+      (defface my-red '((t (:foreground "white" :background "red"))) "")
+      (defface my-orangered '((t (:foreground "white" :background "orange red"))) "")
+      (defface my-orange '((t (:foreground "dim grey" :background "orange"))) "")
+      (defface my-gold '((t (:foreground "dim grey" :background "gold"))) "")
+      (defface my-yellow '((t (:foreground "dim grey" :background "yellow"))) "")
+      (defface my-chartreuse '((t (:foreground "dim grey" :background "chartreuse"))) "")
+      (defface my-green '((t (:foreground "dim grey" :background "green"))) "")
+      (defface my-sgreen '((t (:foreground "dim grey" :background "spring green"))) "")
+      (defface my-cyan '((t (:foreground "dim grey" :background "cyan"))) "")
+      (defface my-blue '((t (:foreground "white" :background "blue"))) "")
+      (defface my-dmagenta '((t (:foreground "white" :background "dark magenta"))) "")
+
+      (setq telephone-line-faces
+            '((red . (my-red . my-red))
+              (ored . (my-orangered . my-orangered))
+              (orange . (my-orange . my-orange))
+              (gold . (my-gold . my-gold))
+              (yellow . (my-yellow . my-yellow))
+              (chartreuse . (my-chartreuse . my-chartreuse))
+              (green . (my-green . my-green))
+              (sgreen . (my-sgreen . my-sgreen))
+              (cyan . (my-cyan . my-cyan))
+              (blue . (my-blue . my-blue))
+              (dmagenta . (my-dmagenta . my-dmagenta))
+              (evil . telephone-line-evil-face)
+              (accent . (telephone-line-accent-active . telephone-line-accent-inactive))
+              (nil . (mode-line . mode-line-inactive))))
+
+      (telephone-line-defsegment s1 () "Oh,")
+      (telephone-line-defsegment s2 () "telephone")
+      (telephone-line-defsegment s3 () "line,")
+      (telephone-line-defsegment s4 () "Give")
+      (telephone-line-defsegment s5 () "me")
+      (telephone-line-defsegment s6 () "some")
+      (telephone-line-defsegment s7 () "time,")
+      (telephone-line-defsegment s8 () "I'm")
+      (telephone-line-defsegment s9 () "living")
+      (telephone-line-defsegment s10 () "in")
+      (telephone-line-defsegment s11 () "twilight")
+
+      (setq telephone-line-lhs
+            '((red . (s1))
+              (ored . (s2))
+              (orange . (s3))
+              (gold . (s4))
+              (yellow . (s5))
+              (chartreuse . (s6))
+              (green . (s7))
+              (sgreen . (s8))
+              (cyan . (s9))
+              (blue . (s10))
+              (dmagenta . (s11))
+              (nil . (telephone-line-minor-mode-segment
+                      telephone-line-buffer-segment))))
+      (setq telephone-line-rhs
+            '((nil . (telephone-line-misc-info-segment))
+              (accent . (telephone-line-major-mode-segment))
+              (evil . (telephone-line-airline-position-segment))))
+
+      (telephone-line-mode t)))
+
+  (at1985|add-after-init-hook 'at1985|telephone-line-hook)
+#+end_src
+
+* Theme
+
+#+begin_src emacs-lisp
+  (defun at1985|set-theme-hook ()
+    (let ((theme 'dracula))
+      (load-theme theme t nil)))
+
+  (at1985|add-after-init-hook 'at1985|set-theme-hook)
+#+end_src
+
+* Projectile
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|projectile-hook ()
+    (when (at1985|req 'projectile)
+      (projectile-mode 1)
+      (with-eval-after-load 'magit
+        (mapc #'projectile-add-known-project
+              (mapcar #'file-name-as-directory (magit-list-repos)))
+        (projectile-save-known-projects))))
+
+  (at1985|add-after-init-hook 'at1985|projectile-hook)
+#+end_src
+
+* Eglot LSP
+
+#+begin_src emacs-lisp :tangle no
+  (defun at1985|eglot-hook ()
+    (when (at1985|req 'eglot)))
+
+  (at1985|add-after-init-hook 'at1985|eglot-hook)
+#+end_src
+
+* GCMH
+
+Garbage Collector Magic Hack
+
+#+begin_src emacs-lisp  
+  (defun at1985|gcmh-hook ()
+    (when (at1985|req 'gcmh)
+      (setq gcmh-verbose nil)
+      (gcmh-mode t)))
+
+  (at1985|add-after-init-hook 'at1985|gcmh-hook)
+#+end_src
+
+* Extras
+
+A ideia aqui é dupla: há /snippets/ de código que não podem ser postas no
+arquivo principal ou que daria muito trabalho fazer isto.
+
+#+begin_src emacs-lisp
+  (defun at1985|load-directory (dirname)
+    "Load extra scripts scattered on DIRNAME."
+
+    (let ((extra-dir (concat user-emacs-directory dirname)))
+      (when (file-directory-p extra-dir)
+        (dolist (file (directory-files extra-dir nil "el$"))
+          (load-file (concat extra-dir "/" file))))))
+
+  (defun at1985|load-extra-hook ()
+    "Load extra scripts scattered on ./extra directory.
+
+  Useful when you do not want to edit the main config file to insert a small
+  modification."
+    (at1985|load-directory "extra"))
+
+  (defun at1985|load-sensitive-hook ()
+    "Load \"sensitive\" scripts scattered on ./sensitive directory.
+
+  Useful for things that can't be seen on a public vcs."
+    (at1985|load-directory "sensitive"))
+
+  (add-hook 'emacs-startup-hook 'at1985|load-sensitive-hook)
+  (add-hook 'emacs-startup-hook 'at1985|load-extra-hook)
+
+  ;; useful for configuration options set via `M-x custom'
+  (setq custom-file (expand-file-name "custom.el" user-emacs-directory))
+  (when (file-exists-p custom-file)
+    (load custom-file nil t))
+#+end_src
+
+* Epílogo
+
+Porque o fim é o fim.
+
+#+begin_src emacs-lisp
+  (provide 'config)
+
+  ;;; config.el ends here
+#+end_src
+
+* End
